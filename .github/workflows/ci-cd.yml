@@ -1,4 +1,4 @@
-name: 3-Tier CI/CD (Test, Build, Push)
+name: 3-Tier CI/CD (Test, Build, Push, Deploy)
 
 on:
   push:
@@ -10,7 +10,6 @@ jobs:
   test-backend:
     name: Test Backend
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -19,19 +18,21 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: "npm"
+          cache-dependency-path: backend/package-lock.json
 
       - name: Install backend deps
         working-directory: backend
-        run: npm install
+        run: npm ci
 
-      - name: Run backend tests
+      # If you have tests, replace build with: npm test
+      - name: Build backend (sanity check)
         working-directory: backend
         run: npm run build
 
   test-frontend:
     name: Test Frontend
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -40,12 +41,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install frontend deps
         working-directory: frontend
-        run: npm install
+        run: npm ci
 
-      - name: Run frontend tests
+      # If you have tests, replace build with: npm test
+      - name: Build frontend (sanity check)
         working-directory: frontend
         run: npm run build
 
@@ -53,6 +57,7 @@ jobs:
     name: Build & Push Docker Images
     runs-on: ubuntu-latest
     needs: [test-backend, test-frontend]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
       - name: Checkout code
@@ -81,3 +86,37 @@ jobs:
           file: ./backend/Dockerfile
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/3tier-backend:latest
+
+  deploy:
+    name: Deploy to EC2 (Docker Compose)
+    runs-on: ubuntu-latest
+    needs: [build-and-push]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+
+            # 1) Go to your app folder (where docker-compose.yml exists)
+            cd /home/ubuntu/3-tier-application
+
+            # 2) Login to Docker Hub (needed for private repos; safe for public too)
+            docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" -p "${{ secrets.DOCKERHUB_TOKEN }}"
+
+            # 3) Pull latest images
+            docker compose pull
+
+            # 4) Recreate containers with latest images
+            docker compose up -d --remove-orphans
+
+            # 5) Cleanup old unused images (optional)
+            docker image prune -f
+
+            # 6) Show running containers (helpful for debugging)
+            docker ps
