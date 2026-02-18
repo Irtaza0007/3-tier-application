@@ -25,7 +25,6 @@ jobs:
         working-directory: backend
         run: npm ci
 
-      # If you have tests, replace build with: npm test
       - name: Build backend (sanity check)
         working-directory: backend
         run: npm run build
@@ -48,7 +47,6 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      # If you have tests, replace build with: npm test
       - name: Build frontend (sanity check)
         working-directory: frontend
         run: npm run build
@@ -69,7 +67,6 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # FRONTEND IMAGE
       - name: Build and push frontend image
         uses: docker/build-push-action@v6
         with:
@@ -78,7 +75,6 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/3tier-frontend:latest
 
-      # BACKEND IMAGE
       - name: Build and push backend image
         uses: docker/build-push-action@v6
         with:
@@ -94,29 +90,28 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.2.0
+      - name: Setup SSH key
+        uses: webfactory/ssh-agent@v0.9.0
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
+          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
+
+      - name: Add EC2 host to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+      - name: SSH smoke test
+        run: |
+          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "whoami && hostname && uptime"
+
+      - name: Deploy
+        run: |
+          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
             set -e
-
-            # 1) Go to your app folder (where docker-compose.yml exists)
             cd /home/ubuntu/3-tier-application
-
-            # 2) Login to Docker Hub (needed for private repos; safe for public too)
             docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" -p "${{ secrets.DOCKERHUB_TOKEN }}"
-
-            # 3) Pull latest images
             docker compose pull
-
-            # 4) Recreate containers with latest images
             docker compose up -d --remove-orphans
-
-            # 5) Cleanup old unused images (optional)
             docker image prune -f
-
-            # 6) Show running containers (helpful for debugging)
             docker ps
+          EOF
