@@ -110,8 +110,8 @@ jobs:
             set -e
             cd /home/ubuntu/3-tier-application
             docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" -p "${{ secrets.DOCKERHUB_TOKEN }}"
-            docker compose pull
-            docker compose up -d --remove-orphans
+            docker-compose pull
+            docker-compose up -d --remove-orphans
             docker image prune -f
             docker ps
           EOF
