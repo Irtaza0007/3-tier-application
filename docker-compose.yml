@@ -1,32 +1,27 @@
 version: "3.9"
 
 services:
-  mongo:
-    image: mongo:latest
-    container_name: mongo
-    volumes:
-      - mongo-data:/data/db
-    restart: unless-stopped
 
   backend:
     image: irtaza0007/3tier-backend:latest
     container_name: backend
+
     environment:
-      - MONGO_URI=mongodb://mongo:27017/mydb
-    depends_on:
-      - mongo
-    restart: unless-stopped
+      - MONGO_URI=mongodb://172.31.17.225:27017/mydb
+
     ports:
       - "5000:5000"
+
+    restart: unless-stopped
 
   frontend:
     image: irtaza0007/3tier-frontend:latest
     container_name: frontend
+
     ports:
       - "80:80"
+
     depends_on:
       - backend
-    restart: unless-stopped
 
-volumes:
-  mongo-data:
+    restart: unless-stopped
