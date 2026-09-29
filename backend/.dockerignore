@@ -1,0 +1,27 @@
+node_modules
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+*.log
+
+# Build output
+/dist
+coverage
+.cache
+
+# Environment files
+.env
+.env.*
+
+# Git/editor metadata
+.git
+.gitignore
+.vscode
+.idea
+.DS_Store
+*.swp
+*.swo
+
+# Docs and non-runtime files
+README*
+*.md
