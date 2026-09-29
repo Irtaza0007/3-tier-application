@@ -23,7 +23,7 @@ jobs:
 
       - name: Install backend deps
         working-directory: backend
-        run: npm ci
+        run: npm ci --no-audit --no-fund
 
       - name: Build backend (sanity check)
         working-directory: backend
@@ -45,7 +45,7 @@ jobs:
 
       - name: Install frontend deps
         working-directory: frontend
-        run: npm ci
+        run: npm ci --no-audit --no-fund
 
       - name: Build frontend (sanity check)
         working-directory: frontend
@@ -76,6 +76,8 @@ jobs:
           context: ./frontend
           file: ./frontend/Dockerfile
           push: true
+          provenance: false
+          sbom: false
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/3tier-frontend:latest
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,scope=frontend,mode=max
@@ -86,6 +88,8 @@ jobs:
           context: ./backend
           file: ./backend/Dockerfile
           push: true
+          provenance: false
+          sbom: false
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/3tier-backend:latest
           cache-from: type=gha,scope=backend
           cache-to: type=gha,scope=backend,mode=max
@@ -109,16 +113,16 @@ jobs:
 
       - name: SSH smoke test
         run: |
-          ssh -vvv ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "whoami"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "whoami"
 
       - name: Deploy
         run: |
-          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
             set -e
             cd /home/ubuntu/3-tier-application
             docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" -p "${{ secrets.DOCKERHUB_TOKEN }}"
-            docker compose pull
+            docker compose pull --quiet
             docker compose up -d --remove-orphans
             docker image prune -f
-            docker ps
+            docker ps --format 'table {{.Names}}\t{{.Status}}'
           EOF
